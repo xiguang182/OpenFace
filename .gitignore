@@ -103,5 +103,10 @@ lib/3rdParty/CameraEnumerator/Debug/
 lib/local/CppInerop/Debug/
 *.user
 
+lib/3rdParty/OpenCV/x64/v141/bin
+lib/3rdParty/OpenCV/x64/v143/bin
+lib/3rdParty/OpenCV/x86/v141/sbin
+
+
 # IDE-generated folders
 .idea

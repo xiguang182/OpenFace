@@ -30,9 +30,18 @@
 //       IEEE International Conference on Automatic Face and Gesture Recognition, 2015 
 //
 ///////////////////////////////////////////////////////////////////////////////
+//#define _WINSOCKAPI_
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32")
+
+
 #include "stdafx_ut.h"
 
 #include "RecorderOpenFace.h"
+
+#include <nlohmann\json.hpp>
+using json = nlohmann::json;
 
 using namespace Utilities;
 
@@ -299,7 +308,7 @@ void RecorderOpenFace::WriteObservation()
 {
 
 	// Write out the CSV file (it will always be there, even if not outputting anything more but frame/face numbers)	
-	if(!csv_recorder.isOpen())
+	if (!csv_recorder.isOpen())
 	{
 		// As we are writing out the header, work out some things like number of landmarks, names of AUs etc.
 		int num_face_landmarks = landmarks_2D.rows / 2;
@@ -334,6 +343,133 @@ void RecorderOpenFace::WriteObservation()
 		csv_recorder.Open(csv_filename, params.isSequence(), params.output2DLandmarks(), params.output3DLandmarks(), params.outputPDMParams(), params.outputPose(),
 			params.outputAUs(), params.outputGaze(), num_face_landmarks, num_model_modes, num_eye_landmarks, au_names_class, au_names_reg);
 	}
+	
+
+	// test field
+
+	// json part
+	json j2 = {
+		{"face_id", this->face_id},
+		{"frame_number", this->frame_number},
+		{"timestamp", this->timestamp},
+		{"landmark_detection_success", this->landmark_detection_success},
+		{"landmark_detection_confidence", this->landmark_detection_confidence},
+		{"landmarks_2D", this->landmarks_2D},
+		{"landmarks_3D", this->landmarks_3D},
+		{"pdm_params_local", this->pdm_params_local},
+		{"au_intensities", this->au_intensities},
+		{"au_occurences", this->au_occurences}
+	};
+	//{"pdm_params_global", this->pdm_params_global},
+	std::vector<float> floatVector(6);
+	for (int i = 0; i < 6; ++i)
+	{
+		floatVector[i] = this->pdm_params_global[i];
+	}
+	j2["pdm_params_global"] = floatVector;
+	 
+	
+	//{"head_pose", this->head_pose},
+	std::vector<float> floatVector2(6);
+	for (int i = 0; i < 6; ++i)
+	{
+		floatVector2[i] = this->head_pose[i];
+	}
+	j2["head_pose"] = floatVector2;
+
+	//{"gaze_direction0", this->gaze_direction0},
+	//{"gaze_direction1", this->gaze_direction1},
+	std::vector<float> floatVector3(6);
+	floatVector3[0] = this->gaze_direction0.x;
+	floatVector3[1] = this->gaze_direction0.y;
+	floatVector3[2] = this->gaze_direction0.z;
+	floatVector3[3] = this->gaze_direction1.x;
+	floatVector3[4] = this->gaze_direction1.y;
+	floatVector3[5] = this->gaze_direction1.z;
+	j2["gaze_direction"] = floatVector3;
+	
+
+
+	//{"gaze_angle", this->gaze_angle},
+	std::vector<float> floatVector4(2);
+	floatVector4[0] = this->gaze_angle[0];
+	floatVector4[1] = this->gaze_angle[1];
+	j2["gaze_angle"] = floatVector4;
+
+
+	//{"eye_landmarks2D", this->eye_landmarks2D},
+	std::vector<float> floatVector5(112);
+	int index = 0;
+	for (auto eye_lmk : this->eye_landmarks2D)
+	{
+		floatVector5[index++] = eye_lmk.x;
+	}
+
+	for (auto eye_lmk : this->eye_landmarks2D)
+	{
+		floatVector5[index++] = eye_lmk.y;
+	}
+
+	j2["eye_landmarks2D"] = floatVector5;
+
+	//{"eye_landmarks3D", this->eye_landmarks3D}
+	std::vector<float> floatVector6(168);
+	index = 0;
+	for (auto eye_lmk : this->eye_landmarks3D)
+	{
+		floatVector6[index++] = eye_lmk.x;
+	}
+
+	for (auto eye_lmk : this->eye_landmarks3D)
+	{
+		floatVector6[index++] = eye_lmk.y;
+	}
+
+	for (auto eye_lmk : this->eye_landmarks3D)
+	{
+		floatVector6[index++] = eye_lmk.z;
+	}
+
+	j2["eye_landmarks3D"] = floatVector6;
+
+	WSADATA wsaData;
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+		std::cerr << "Failed to initialize Winsock" << std::endl;
+	}
+
+	// Create a socket
+	SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+	if (clientSocket == INVALID_SOCKET) {
+		std::cerr << "Error creating socket" << std::endl;
+		WSACleanup();
+	}
+	else {
+		// Server address and port
+		sockaddr_in serverAddress;
+		serverAddress.sin_family = AF_INET;
+		serverAddress.sin_port = htons(8080);  // Change this to your server port
+		inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr);  // Change this to your server IP address
+
+		// Connect to the server
+		if (connect(clientSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == SOCKET_ERROR) {
+			std::cerr << "Error connecting to server" << std::endl;
+		}
+
+		// Send data to the server
+		//const char* message = "Hello, server!";
+		std::string tmp = j2.dump();
+		const char* message = tmp.c_str();
+
+		if (send(clientSocket, message, strlen(message), 0) == SOCKET_ERROR) {
+			std::cerr << "Error sending data" << std::endl;
+		}
+
+		// Close the socket
+		closesocket(clientSocket);
+		WSACleanup();
+	}
+	
+
 
 	this->csv_recorder.WriteLine(face_id, frame_number, timestamp, landmark_detection_success, 
 		landmark_detection_confidence, landmarks_2D, landmarks_3D, pdm_params_local, pdm_params_global, head_pose,
